@@ -10,9 +10,12 @@ export default function TasksPage() {
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [loading, setLoading] = useState(true);
+  const [waking, setWaking] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchTasks = async () => {
+  // On a cold free-tier backend the first request can fail while the server
+  // boots. Retry a few times (showing a "waking up" message) before giving up.
+  const fetchTasks = async ({ retries = 4, delay = 4000 } = {}) => {
     try {
       setLoading(true);
       const res = await fetch(API_URL);
@@ -20,8 +23,15 @@ export default function TasksPage() {
       const data = await res.json();
       setTasks(data);
       setError("");
+      setWaking(false);
     } catch (err) {
-      setError(err.message);
+      if (retries > 0) {
+        setWaking(true);
+        await new Promise((r) => setTimeout(r, delay));
+        return fetchTasks({ retries: retries - 1, delay });
+      }
+      setWaking(false);
+      setError("Couldn't reach the server. Please refresh in a moment.");
     } finally {
       setLoading(false);
     }
@@ -128,7 +138,11 @@ export default function TasksPage() {
 
       {error && <div className="error">{error}</div>}
       {loading ? (
-        <p className="status">Loading tasks…</p>
+        <p className="status">
+          {waking
+            ? "Waking up the server… this can take up to a minute on first load."
+            : "Loading tasks…"}
+        </p>
       ) : tasks.length === 0 ? (
         <p className="status">No tasks yet — add one above.</p>
       ) : (
